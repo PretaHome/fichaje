@@ -270,8 +270,8 @@
   // =====================================================
   // CONFIGURACIÓN — editá estos valores
   // =====================================================
-  const WIFI_PERMITIDA = "deposito";           // nombre exacto de la red WiFi del depósito
-  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzj8zLvlsZEqAGg6L4ezlAemGONUxmIwrUBRWOJo3ExcfYx9gB5VHw6GG-x_RbPoAyF/exec"; // URL del web app de Google Apps Script
+  const WIFI_PERMITIDA = "FiberCorp WiFi481";           // nombre exacto de la red WiFi del depósito
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzbprbZ_18sUlQmJyqm7fpvprzSM_RZXYD275xrijTrN-GDdEyB2Ib6LrbOU8m_rg9p/exec"; // URL del web app de Google Apps Script
 
   // PINs por empleado: { "Nombre exacto": "pin" }
   const PINES = {
@@ -289,6 +289,13 @@
 
   let tipoFichaje = "entrada";
   let wifiOk = false;
+  let ipPublica = "";
+
+  // Obtener IP pública al cargar
+  fetch("https://api.ipify.org?format=json")
+    .then(r => r.json())
+    .then(d => { ipPublica = d.ip; })
+    .catch(() => { ipPublica = ""; });
 
   function setTipo(t) {
     tipoFichaje = t;
@@ -362,7 +369,7 @@
     const dia   = now.toLocaleDateString('es-AR', { weekday:'long' });
 
     try {
-      const params = new URLSearchParams({ nombre, tipo: tipoFichaje, fecha, hora, dia });
+      const params = new URLSearchParams({ nombre, tipo: tipoFichaje, fecha, hora, dia, ip: ipPublica });
       // Intentamos fetch normal primero, si falla usamos JSONP como fallback
       let resultado = null;
 
@@ -377,7 +384,7 @@
         // Fallback JSONP
         resultado = await new Promise((resolve, reject) => {
           const cbName = "cb_" + Date.now();
-          const p = new URLSearchParams({ nombre, tipo: tipoFichaje, fecha, hora, dia, callback: cbName });
+          const p = new URLSearchParams({ nombre, tipo: tipoFichaje, fecha, hora, dia, ip: ipPublica, callback: cbName });
           const script = document.createElement("script");
           script.src = SCRIPT_URL + "?" + p.toString();
           script.onerror = () => reject(new Error("Error de red"));
