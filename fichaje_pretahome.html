@@ -297,6 +297,46 @@
     .then(d => { ipPublica = d.ip; })
     .catch(() => { ipPublica = ""; });
 
+  // Control de dispositivo: un celu = un empleado por día
+  function getEmpleadoDelDia() {
+    const hoy = new Date().toLocaleDateString("es-AR");
+    const guardado = localStorage.getItem("fichaje_empleado");
+    const fechaGuardada = localStorage.getItem("fichaje_fecha");
+    if (fechaGuardada === hoy && guardado) return guardado;
+    // Si es otro día, limpiar
+    localStorage.removeItem("fichaje_empleado");
+    localStorage.removeItem("fichaje_fecha");
+    return null;
+  }
+
+  function guardarEmpleadoDelDia(nombre) {
+    const hoy = new Date().toLocaleDateString("es-AR");
+    localStorage.setItem("fichaje_empleado", nombre);
+    localStorage.setItem("fichaje_fecha", hoy);
+  }
+
+  // Al cargar, si ya fichó alguien hoy, bloquear el selector
+  window.addEventListener("DOMContentLoaded", () => {
+    const empleadoHoy = getEmpleadoDelDia();
+    if (empleadoHoy) {
+      const select = document.getElementById("nombre");
+      // Dejar solo la opción del empleado que ya fichó
+      Array.from(select.options).forEach(opt => {
+        if (opt.value && opt.value !== empleadoHoy) {
+          opt.disabled = true;
+          opt.style.color = "#444";
+        }
+      });
+      select.value = empleadoHoy;
+      // Mostrar aviso
+      const badge = document.getElementById("wifiLabel").parentElement;
+      const aviso = document.createElement("div");
+      aviso.style.cssText = "font-size:11px;color:#666;margin-bottom:1rem;padding:8px 12px;background:#111;border-radius:8px;border:1px solid #222;";
+      aviso.textContent = "Este dispositivo ya está registrado para " + empleadoHoy + " hoy.";
+      badge.parentElement.insertBefore(aviso, badge.nextSibling);
+    }
+  });
+
   function setTipo(t) {
     tipoFichaje = t;
     document.getElementById("btnEntrada").className = "tipo-btn" + (t === "entrada" ? " active-entrada" : "");
@@ -400,8 +440,8 @@
 
       if (resultado === "ok") {
         const accion = tipoFichaje === "entrada" ? "Entrada registrada" : "Salida registrada";
+        guardarEmpleadoDelDia(nombre);
         mostrarOk(accion + "\n" + nombre + " · " + hora);
-        document.getElementById("nombre").value = "";
         document.getElementById("pin").value = "";
       } else if (resultado === "error_wifi") {
         mostrarError("No estás en el depósito. Conectate al WiFi \"" + WIFI_PERMITIDA + "\".");
