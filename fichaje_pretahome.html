@@ -297,45 +297,17 @@
     .then(d => { ipPublica = d.ip; })
     .catch(() => { ipPublica = ""; });
 
-  // Control de dispositivo: un celu = un empleado por día
-  function getEmpleadoDelDia() {
-    const hoy = new Date().toLocaleDateString("es-AR");
-    const guardado = localStorage.getItem("fichaje_empleado");
-    const fechaGuardada = localStorage.getItem("fichaje_fecha");
-    if (fechaGuardada === hoy && guardado) return guardado;
-    // Si es otro día, limpiar
-    localStorage.removeItem("fichaje_empleado");
-    localStorage.removeItem("fichaje_fecha");
-    return null;
-  }
-
-  function guardarEmpleadoDelDia(nombre) {
-    const hoy = new Date().toLocaleDateString("es-AR");
-    localStorage.setItem("fichaje_empleado", nombre);
-    localStorage.setItem("fichaje_fecha", hoy);
-  }
-
-  // Al cargar, si ya fichó alguien hoy, bloquear el selector
-  window.addEventListener("DOMContentLoaded", () => {
-    const empleadoHoy = getEmpleadoDelDia();
-    if (empleadoHoy) {
-      const select = document.getElementById("nombre");
-      // Dejar solo la opción del empleado que ya fichó
-      Array.from(select.options).forEach(opt => {
-        if (opt.value && opt.value !== empleadoHoy) {
-          opt.disabled = true;
-          opt.style.color = "#444";
-        }
-      });
-      select.value = empleadoHoy;
-      // Mostrar aviso
-      const badge = document.getElementById("wifiLabel").parentElement;
-      const aviso = document.createElement("div");
-      aviso.style.cssText = "font-size:11px;color:#666;margin-bottom:1rem;padding:8px 12px;background:#111;border-radius:8px;border:1px solid #222;";
-      aviso.textContent = "Este dispositivo ya está registrado para " + empleadoHoy + " hoy.";
-      badge.parentElement.insertBefore(aviso, badge.nextSibling);
+  // ID único del dispositivo — se genera una vez y persiste
+  function getDeviceId() {
+    let id = localStorage.getItem("fichaje_device_id");
+    if (!id) {
+      id = "dev_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem("fichaje_device_id", id);
     }
-  });
+    return id;
+  }
+
+  const DEVICE_ID = getDeviceId();
 
   function setTipo(t) {
     tipoFichaje = t;
@@ -409,7 +381,7 @@
     const dia   = now.toLocaleDateString('es-AR', { weekday:'long' });
 
     try {
-      const params = new URLSearchParams({ nombre, tipo: tipoFichaje, fecha, hora, dia, ip: ipPublica });
+      const params = new URLSearchParams({ nombre, tipo: tipoFichaje, fecha, hora, dia, ip: ipPublica, deviceId: DEVICE_ID });
       // Intentamos fetch normal primero, si falla usamos JSONP como fallback
       let resultado = null;
 
@@ -424,7 +396,7 @@
         // Fallback JSONP
         resultado = await new Promise((resolve, reject) => {
           const cbName = "cb_" + Date.now();
-          const p = new URLSearchParams({ nombre, tipo: tipoFichaje, fecha, hora, dia, ip: ipPublica, callback: cbName });
+          const p = new URLSearchParams({ nombre, tipo: tipoFichaje, fecha, hora, dia, ip: ipPublica, deviceId: DEVICE_ID, callback: cbName });
           const script = document.createElement("script");
           script.src = SCRIPT_URL + "?" + p.toString();
           script.onerror = () => reject(new Error("Error de red"));
@@ -440,11 +412,12 @@
 
       if (resultado === "ok") {
         const accion = tipoFichaje === "entrada" ? "Entrada registrada" : "Salida registrada";
-        guardarEmpleadoDelDia(nombre);
         mostrarOk(accion + "\n" + nombre + " · " + hora);
         document.getElementById("pin").value = "";
       } else if (resultado === "error_wifi") {
         mostrarError("No estás en el depósito. Conectate al WiFi \"" + WIFI_PERMITIDA + "\".");
+      } else if (resultado === "error_dispositivo") {
+        mostrarError("Este dispositivo ya fichó hoy como otro empleado. No podés fichar por dos personas.");
       } else {
         mostrarError("Error inesperado. Avisale al encargado.");
       }
