@@ -271,7 +271,7 @@
   // CONFIGURACIÓN — editá estos valores
   // =====================================================
   const WIFI_PERMITIDA = "deposito";           // nombre exacto de la red WiFi del depósito
-  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyITTkiUyWK6pyIyWsuV8S6GHqn6uW36kHrq5H0S1mSWXaTwt5ilOc_x4maMd0RQW2G/exec"; // URL del web app de Google Apps Script
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzj8zLvlsZEqAGg6L4ezlAemGONUxmIwrUBRWOJo3ExcfYx9gB5VHw6GG-x_RbPoAyF/exec"; // URL del web app de Google Apps Script
 
   // PINs por empleado: { "Nombre exacto": "pin" }
   const PINES = {
@@ -362,27 +362,47 @@
     const dia   = now.toLocaleDateString('es-AR', { weekday:'long' });
 
     try {
-      const res = await fetch(SCRIPT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre, tipo: tipoFichaje, fecha, hora, dia })
-      });
+      const params = new URLSearchParams({ nombre, tipo: tipoFichaje, fecha, hora, dia });
+      // Intentamos fetch normal primero, si falla usamos JSONP como fallback
+      let resultado = null;
 
-      const data = await res.json();
+      try {
+        const res = await fetch(SCRIPT_URL + "?" + params.toString(), { method: "GET" });
+        const text = await res.text();
+        // Si la respuesta es JSONP (callback(...)), extraemos el JSON
+        const match = text.match(/^[^(]+\((.+)\)\s*;?\s*$/);
+        const data = JSON.parse(match ? match[1] : text);
+        resultado = data.resultado;
+      } catch(fetchErr) {
+        // Fallback JSONP
+        resultado = await new Promise((resolve, reject) => {
+          const cbName = "cb_" + Date.now();
+          const p = new URLSearchParams({ nombre, tipo: tipoFichaje, fecha, hora, dia, callback: cbName });
+          const script = document.createElement("script");
+          script.src = SCRIPT_URL + "?" + p.toString();
+          script.onerror = () => reject(new Error("Error de red"));
+          window[cbName] = (data) => {
+            document.body.removeChild(script);
+            delete window[cbName];
+            resolve(data.resultado);
+          };
+          document.body.appendChild(script);
+          setTimeout(() => reject(new Error("Timeout")), 10000);
+        });
+      }
 
-      if (data.resultado === "ok") {
-        const emoji = tipoFichaje === "entrada" ? "✓" : "✓";
+      if (resultado === "ok") {
         const accion = tipoFichaje === "entrada" ? "Entrada registrada" : "Salida registrada";
         mostrarOk(accion + "\n" + nombre + " · " + hora);
         document.getElementById("nombre").value = "";
         document.getElementById("pin").value = "";
-      } else if (data.resultado === "error_wifi") {
+      } else if (resultado === "error_wifi") {
         mostrarError("No estás en el depósito. Conectate al WiFi \"" + WIFI_PERMITIDA + "\".");
       } else {
         mostrarError("Error inesperado. Avisale al encargado.");
       }
     } catch (e) {
-      mostrarError("No se pudo conectar al servidor. Verificá tu conexión.");
+      mostrarError("No se pudo conectar al servidor. Verificá tu conexión: " + e.message);
     }
 
     btn.disabled = false;
