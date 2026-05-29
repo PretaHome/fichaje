@@ -297,17 +297,30 @@
     .then(d => { ipPublica = d.ip; })
     .catch(() => { ipPublica = ""; });
 
-  // ID único del dispositivo — se genera una vez y persiste
+  // ID único del dispositivo usando cookies (más confiable en iOS)
   function getDeviceId() {
+    // Intentar leer de cookie
+    const match = document.cookie.match(/fichaje_device_id=([^;]+)/);
+    if (match) return match[1];
+    
+    // Intentar leer de localStorage como fallback
     let id = localStorage.getItem("fichaje_device_id");
+    
     if (!id) {
       id = "dev_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem("fichaje_device_id", id);
     }
+    
+    // Guardar en ambos lugares
+    const expiry = new Date();
+    expiry.setFullYear(expiry.getFullYear() + 1);
+    document.cookie = "fichaje_device_id=" + id + "; expires=" + expiry.toUTCString() + "; path=/; SameSite=Lax";
+    localStorage.setItem("fichaje_device_id", id);
+    
     return id;
   }
 
   const DEVICE_ID = getDeviceId();
+  console.log("Device ID:", DEVICE_ID);
 
   function setTipo(t) {
     tipoFichaje = t;
